@@ -16,6 +16,7 @@ class SolarSystemViewController: UIViewController, ARSCNViewDelegate {
         let arSCNView = ARSCNView(frame: view.bounds)
         arSCNView.session = arSession
         arSCNView.automaticallyUpdatesLighting = true
+        arSCNView.autoresizingMask = [.flexibleHeight, .flexibleWidth]
         return arSCNView
     }()
     lazy var arSession: ARSession = ARSession()
@@ -30,11 +31,38 @@ class SolarSystemViewController: UIViewController, ARSCNViewDelegate {
     var moonPathNode: SCNNode! // 白道，控制月球公转
     
     // MARK: VC
+    override var shouldAutorotate: Bool {
+        return true
+    }
+    
+    override var prefersStatusBarHidden: Bool {
+        return true
+    }
+    
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
+        if UIDevice.current.userInterfaceIdiom == .phone {
+            return UIInterfaceOrientationMask.landscape
+        } else {
+            return UIInterfaceOrientationMask.all
+        }
+    }
+    
     override func viewDidLoad() {
         super.viewDidLoad()
         
         view.addSubview(arSCNView)
         arSCNView.delegate = self
+        
+        // 一个黑色环境
+//        let cameraNode = SCNNode()
+//        cameraNode.camera = SCNCamera()
+//        arSCNView.scene.rootNode.addChildNode(cameraNode)
+//
+//        cameraNode.position = SCNVector3Make(0, 50, 250);
+//        cameraNode.camera?.zFar = 2000;
+//        cameraNode.rotation =  SCNVector4Make(1, 0, 0, -Float.pi/16);
+//
+//        arSCNView.backgroundColor = UIColor.black
         
         setupNodes()
         setupAnimation()
@@ -78,21 +106,42 @@ class SolarSystemViewController: UIViewController, ARSCNViewDelegate {
         moonPathNode = SCNNode()
         
         // 几何形与渲染
-        sunNode.geometry = SCNSphere(radius: 3)
-        earthNode.geometry = SCNSphere(radius: 1)
-        moonNode.geometry = SCNSphere(radius: 0.3)
+        sunNode.geometry = SCNSphere(radius: 3.0)
+        earthNode.geometry = SCNSphere(radius: 1.0)
+        moonNode.geometry = SCNSphere(radius: 0.5)
         
         sunNode.geometry?.firstMaterial?.diffuse.contents = UIImage(named: "sun.jpg")
+        sunNode.geometry?.firstMaterial?.multiply.contents = UIImage(named: "sun.jpg")
         earthNode.geometry?.firstMaterial?.diffuse.contents = UIImage(named: "earth-diffuse-mini.jpg")
+        earthNode.geometry?.firstMaterial?.emission.contents = UIImage(named: "earth-emission-mini.jpg")
+        earthNode.geometry?.firstMaterial?.specular.contents = UIImage(named: "earth-specular-mini.jpg")
         moonNode.geometry?.firstMaterial?.diffuse.contents = UIImage(named: "moon.jpg")
         
-        sunNode.position = SCNVector3Make(0, 0, -30)
+        sunNode.geometry?.firstMaterial?.multiply.intensity = 0.5 //強度
+        sunNode.geometry?.firstMaterial?.lightingModel = .constant
+        
+        sunNode.geometry?.firstMaterial?.multiply.wrapS = .repeat
+        sunNode.geometry?.firstMaterial?.diffuse.wrapS = .repeat
+        sunNode.geometry?.firstMaterial?.multiply.wrapT = .repeat
+        sunNode.geometry?.firstMaterial?.diffuse.wrapT = .repeat
+        
+        sunNode.geometry?.firstMaterial?.locksAmbientWithDiffuse = true
+        earthNode.geometry?.firstMaterial?.locksAmbientWithDiffuse = true
+        moonNode.geometry?.firstMaterial?.locksAmbientWithDiffuse = true
+        
+        // 地球反光
+        earthNode.geometry?.firstMaterial?.shininess = 0.1
+        earthNode.geometry?.firstMaterial?.specular.intensity = 0.5
+        moonNode.geometry?.firstMaterial?.specular.contents = UIColor.gray
+        
+        // 位置
+        sunNode.position = SCNVector3Make(0, -10, -20)
         earthPathNode.position = sunNode.position
         
         earthNode.position = SCNVector3Make(10, 0, 0)
         moonPathNode.position = earthNode.position
         
-        moonNode.position = SCNVector3Make(2, 0, 0)
+        moonNode.position = SCNVector3Make(3, 0, 0)
         
         // 节点层级关系
         arSCNView.scene.rootNode.addChildNode(sunNode)
@@ -105,6 +154,35 @@ class SolarSystemViewController: UIViewController, ARSCNViewDelegate {
     }
     
     func setupAnimation() {
+        
+        // 月亮自转
+        moonNode.runAction(SCNAction.repeatForever(SCNAction.rotateBy(x: 0, y: 4, z: 0, duration: 1)))
+        
+        // 地球自转
+        earthNode.runAction(SCNAction.repeatForever(SCNAction.rotateBy(x: 0, y: 2, z: 0, duration: 1)))
+        
+        // 太阳自转，这里采用
+        var sunAnimation = CABasicAnimation(keyPath: "contentsTransform")
+        sunAnimation.duration = 10.0
+        sunAnimation.fromValue = CATransform3DConcat(CATransform3DMakeTranslation(0, 0, 0), CATransform3DMakeScale(3, 3, 3))
+        sunAnimation.fromValue = CATransform3DConcat(CATransform3DMakeTranslation(1, 0, 0), CATransform3DMakeScale(3, 3, 3))
+        sunAnimation.repeatCount = MAXFLOAT
+        sunNode.geometry?.firstMaterial?.diffuse.addAnimation(sunAnimation, forKey: "sun rotation")
+        
+        sunAnimation = CABasicAnimation(keyPath: "contentsTransform")
+        sunAnimation.duration = 30.0
+        sunAnimation.fromValue = CATransform3DConcat(CATransform3DMakeTranslation(0, 0, 0), CATransform3DMakeScale(5, 5, 5))
+        sunAnimation.fromValue = CATransform3DConcat(CATransform3DMakeTranslation(1, 0, 0), CATransform3DMakeScale(5, 5, 5))
+        sunAnimation.repeatCount = MAXFLOAT
+        sunNode.geometry?.firstMaterial?.multiply.addAnimation(sunAnimation, forKey: "sun rotation2")
+        
+        // 月亮公转
+        moonPathNode.runAction(SCNAction.repeatForever(SCNAction.rotateBy(x: 0, y: 3, z: 0, duration: 1)))
+        
+        // 地球公转
+        earthPathNode.runAction(SCNAction.repeatForever(SCNAction.rotateBy(x: 0, y: 1, z: 0, duration: 1)))
+
+        /*
         // 月亮公转
         let moonPathAnimation = CABasicAnimation(keyPath: "rotation")
         moonPathAnimation.duration = 3
@@ -134,23 +212,26 @@ class SolarSystemViewController: UIViewController, ARSCNViewDelegate {
         earthNode.addAnimation(earthAnimation, forKey: "earth rotation")
         
         // 太阳自转
-        let sunAnimation = CABasicAnimation(keyPath: "rotation")
-        sunAnimation.duration = 5
-        sunAnimation.toValue = SCNVector4(0, 1, 0, Float.pi * 2)
-        sunAnimation.repeatCount = MAXFLOAT
-        sunNode.addAnimation(sunAnimation, forKey: "sun rotation")
+        let sunAnimation2 = CABasicAnimation(keyPath: "rotation")
+        sunAnimation2.duration = 5
+        sunAnimation2.toValue = SCNVector4(0, 1, 0, Float.pi * 2)
+        sunAnimation2.repeatCount = MAXFLOAT
+        sunNode.addAnimation(sunAnimation2, forKey: "sun rotation")
+         */
     }
     
     var sunHaloNode: SCNNode? // 太阳光环（晕）
     func setupLight() {
+        // 太阳光
         let lightNode = SCNNode()
         lightNode.light = SCNLight()
-        lightNode.light?.color = UIColor.red
+        lightNode.light?.color = UIColor.black
+        lightNode.light?.type = .omni
+        lightNode.light?.attenuationStartDistance = 3.0
+        lightNode.light?.attenuationEndDistance = 20.0
         sunNode.addChildNode(lightNode)
         
-        lightNode.light?.attenuationStartDistance = 1.0
-        lightNode.light?.attenuationEndDistance = 20.0
-        
+        // 动画
         SCNTransaction.begin()
         SCNTransaction.animationDuration = 1
         SCNTransaction.completionBlock = {
@@ -158,14 +239,28 @@ class SolarSystemViewController: UIViewController, ARSCNViewDelegate {
             self.sunHaloNode?.opacity = 0.5
         }
         SCNTransaction.commit()
-        
+
+        // 晕
         sunHaloNode = SCNNode()
         sunHaloNode?.geometry = SCNPlane(width: 25, height: 25)
-        sunHaloNode?.rotation = SCNVector4Make(0, 1, 0, 0 * Float.pi / 180.0)
+        sunHaloNode?.rotation = SCNVector4Make(1, 0, 0, 0)
         sunHaloNode?.geometry?.firstMaterial?.diffuse.contents = UIImage(named: "sun-halo")
         sunHaloNode?.geometry?.firstMaterial?.lightingModel = .constant
         sunHaloNode?.geometry?.firstMaterial?.writesToDepthBuffer = false
         sunHaloNode?.opacity = 0.9
         sunNode.addChildNode(sunHaloNode!)
+        
+        // 地球公转轨道
+        let earthOrbitNode = SCNNode()
+        earthOrbitNode.opacity = 0.4
+        earthOrbitNode.geometry = SCNPlane(width: 21, height: 21)
+        earthOrbitNode.geometry?.firstMaterial?.diffuse.contents = UIImage(named: "orbit")
+        earthOrbitNode.geometry?.firstMaterial?.multiply.contents = UIImage(named: "orbit")
+        earthOrbitNode.geometry?.firstMaterial?.lightingModel = .constant
+        earthOrbitNode.geometry?.firstMaterial?.diffuse.mipFilter = .linear
+        earthOrbitNode.rotation = SCNVector4Make(1, 0, 0, -Float.pi/2)
+        earthOrbitNode.geometry?.firstMaterial?.lightingModel = .constant
+        sunNode.addChildNode(earthOrbitNode)
     }
 }
+
